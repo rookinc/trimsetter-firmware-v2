@@ -98,6 +98,7 @@ uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 /* USER CODE BEGIN PRIVATE_VARIABLES */
 static char trim_cli_line[128];
 static uint16_t trim_cli_len = 0;
+static char trim_status_response[512];
 
 static const char *trim_alarm_state = "OK";
 static const char *trim_system_state = "READY";
@@ -376,11 +377,9 @@ static const char *trim_motion_admission(void)
 
 static void trim_cli_write_status(void)
 {
-  char status[384];
-
   snprintf(
-    status,
-    sizeof(status),
+    trim_status_response,
+    sizeof(trim_status_response),
     "{\"ok\":true,"
     "\"mode\":\"real\","
     "\"contract_version\":\"trimsetter.mcu.status.v0.1\","
@@ -400,7 +399,7 @@ static void trim_cli_write_status(void)
     trim_machine_action
   );
 
-  trim_cli_send_response(status);
+  trim_cli_send_response(trim_status_response);
 }
 
 static void trim_cli_handle_line(const char *line)
