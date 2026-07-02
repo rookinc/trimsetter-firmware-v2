@@ -24,6 +24,7 @@
 /* USER CODE BEGIN INCLUDE */
 #include <string.h>
 #include <stdbool.h>
+#include <stdio.h>
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -97,6 +98,12 @@ uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 /* USER CODE BEGIN PRIVATE_VARIABLES */
 static char trim_cli_line[128];
 static uint16_t trim_cli_len = 0;
+
+static const char *trim_alarm_state = "OK";
+static const char *trim_system_state = "READY";
+static bool trim_motion_admitted = false;
+static char trim_loaded_command_file_id[64] = "";
+static const char *trim_machine_action = "none";
 /* USER CODE END PRIVATE_VARIABLES */
 
 /**
@@ -133,6 +140,9 @@ static void trim_cli_write(const char *text);
 static void trim_cli_handle_line(const char *line);
 static void trim_cli_prompt(void);
 static void trim_cli_send_response(const char *text);
+static const char *trim_motion_admission(void);
+static bool trim_streq(const char *a, const char *b);
+static void trim_cli_write_status(void);
 /* USER CODE END PRIVATE_FUNCTIONS_DECLARATION */
 
 /**
@@ -349,6 +359,50 @@ static void trim_cli_send_response(const char *text)
   trim_cli_write(text);
 }
 
+static bool trim_streq(const char *a, const char *b)
+{
+  return a && b && strcmp(a, b) == 0;
+}
+
+static const char *trim_motion_admission(void)
+{
+  if (!trim_streq(trim_alarm_state, "OK"))
+  {
+    return "closed";
+  }
+
+  return trim_motion_admitted ? "open" : "closed";
+}
+
+static void trim_cli_write_status(void)
+{
+  char status[384];
+
+  snprintf(
+    status,
+    sizeof(status),
+    "{\"ok\":true,"
+    "\"mode\":\"real\","
+    "\"contract_version\":\"trimsetter.mcu.status.v0.1\","
+    "\"authority_boundary\":\"mcu\","
+    "\"connected\":true,"
+    "\"alarm_state\":\"%s\","
+    "\"system_state\":\"%s\","
+    "\"machine_state\":\"%s\","
+    "\"motion_admission\":\"%s\","
+    "\"loaded_command_file_id\":\"%s\","
+    "\"machine_action\":\"%s\"}\r\n",
+    trim_alarm_state,
+    trim_system_state,
+    trim_system_state,
+    trim_motion_admission(),
+    trim_loaded_command_file_id,
+    trim_machine_action
+  );
+
+  trim_cli_send_response(status);
+}
+
 static void trim_cli_handle_line(const char *line)
 {
   if (!line || line[0] == '\0')
@@ -360,25 +414,15 @@ static void trim_cli_handle_line(const char *line)
   {
     trim_cli_send_response(
       "commands: help, status\r\n"
-      "phase: usb_witness_only\r\n"
-      "motion_admission: closed\r\n"
+      "phase: state_model_parity\r\n"
+      "motion_admission: computed_from_state\r\n"
     );
     return;
   }
 
   if (strcmp(line, "status") == 0)
   {
-    trim_cli_send_response(
-      "{\"ok\":true,"
-      "\"mode\":\"real\","
-      "\"contract_version\":\"trimsetter.mcu.status.v0.1\","
-      "\"authority_boundary\":\"mcu\","
-      "\"connected\":true,"
-      "\"alarm_state\":\"OK\","
-      "\"system_state\":\"READY\","
-      "\"motion_admission\":\"closed\","
-      "\"machine_action\":\"none\"}\r\n"
-    );
+    trim_cli_write_status();
     return;
   }
 
