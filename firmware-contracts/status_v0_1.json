@@ -1,0 +1,23 @@
+{
+  "contract": "trimsetter.mcu.status.v0.1",
+  "required_fields": [
+    "mode",
+    "contract_version",
+    "authority_boundary",
+    "connected",
+    "alarm_state",
+    "system_state",
+    "motion_admission",
+    "machine_action"
+  ],
+  "safe_boot_defaults": {
+    "mode": "real",
+    "contract_version": "trimsetter.mcu.status.v0.1",
+    "authority_boundary": "mcu",
+    "connected": true,
+    "alarm_state": "FAULT",
+    "system_state": "READY",
+    "motion_admission": "closed",
+    "machine_action": "none"
+  }
+}
