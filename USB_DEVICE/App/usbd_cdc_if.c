@@ -22,7 +22,8 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN INCLUDE */
-
+#include <string.h>
+#include <stdbool.h>
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -94,7 +95,8 @@ uint8_t UserRxBufferFS[APP_RX_DATA_SIZE];
 uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 
 /* USER CODE BEGIN PRIVATE_VARIABLES */
-
+static char trim_cli_line[128];
+static uint16_t trim_cli_len = 0;
 /* USER CODE END PRIVATE_VARIABLES */
 
 /**
@@ -127,7 +129,10 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length);
 static int8_t CDC_Receive_FS(uint8_t* pbuf, uint32_t *Len);
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_DECLARATION */
-
+static void trim_cli_write(const char *text);
+static void trim_cli_handle_line(const char *line);
+static void trim_cli_prompt(void);
+static void trim_cli_send_response(const char *text);
 /* USER CODE END PRIVATE_FUNCTIONS_DECLARATION */
 
 /**
@@ -259,6 +264,39 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
+  for (uint32_t i = 0; i < *Len; i++)
+  {
+    char c = (char)Buf[i];
+
+    if (c == '\r' || c == '\n')
+    {
+      if (trim_cli_len > 0)
+      {
+        trim_cli_line[trim_cli_len] = '\0';
+        trim_cli_handle_line(trim_cli_line);
+        trim_cli_len = 0;
+      }
+      trim_cli_prompt();
+    }
+    else if (c == 8 || c == 127)
+    {
+      if (trim_cli_len > 0)
+      {
+        trim_cli_len--;
+      }
+    }
+    else if (trim_cli_len < (sizeof(trim_cli_line) - 1))
+    {
+      trim_cli_line[trim_cli_len++] = c;
+    }
+    else
+    {
+      trim_cli_len = 0;
+      trim_cli_write("\r\nERR line_too_long\r\n");
+      trim_cli_prompt();
+    }
+  }
+
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);
   return (USBD_OK);
@@ -291,7 +329,61 @@ uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len)
 }
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_IMPLEMENTATION */
+static void trim_cli_write(const char *text)
+{
+  if (!text) return;
 
+  uint16_t len = (uint16_t)strlen(text);
+  if (len == 0) return;
+
+  CDC_Transmit_FS((uint8_t *)text, len);
+}
+
+static void trim_cli_prompt(void)
+{
+  trim_cli_write("trimsetter> ");
+}
+
+static void trim_cli_send_response(const char *text)
+{
+  trim_cli_write(text);
+}
+
+static void trim_cli_handle_line(const char *line)
+{
+  if (!line || line[0] == '\0')
+  {
+    return;
+  }
+
+  if (strcmp(line, "help") == 0)
+  {
+    trim_cli_send_response(
+      "commands: help, status\r\n"
+      "phase: usb_witness_only\r\n"
+      "motion_admission: closed\r\n"
+    );
+    return;
+  }
+
+  if (strcmp(line, "status") == 0)
+  {
+    trim_cli_send_response(
+      "{\"ok\":true,"
+      "\"mode\":\"real\","
+      "\"contract_version\":\"trimsetter.mcu.status.v0.1\","
+      "\"authority_boundary\":\"mcu\","
+      "\"connected\":true,"
+      "\"alarm_state\":\"OK\","
+      "\"system_state\":\"READY\","
+      "\"motion_admission\":\"closed\","
+      "\"machine_action\":\"none\"}\r\n"
+    );
+    return;
+  }
+
+  trim_cli_send_response("ERR unknown_command\r\n");
+}
 /* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */
 
 /**
